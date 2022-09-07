@@ -1,0 +1,2 @@
+# Library
+Based on [Keep network's v1 crypto libraries](https://github.com/keep-network/keep-core/tree/main/solidity-v1/contracts/cryptography) for interacting with EC precompiles. Changes were made to struct naming and compression / decompresssion. 

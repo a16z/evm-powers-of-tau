@@ -1,0 +1,201 @@
+\documentclass{article}
+\usepackage{fullpage}
+\usepackage[utf8]{inputenc}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{textgreek}
+\usepackage{xcolor}
+
+\newcommand{\pp}{\mathsf{pp}}
+\newcommand{\GG}{\mathbb{G}}
+\newcommand{\sample}{\stackrel{\$}{\gets}}
+\newcommand\lera[1]{\textcolor{red}{\textbf{Lera:} #1}}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=blue,
+    pdftitle={Overleaf Example},
+    pdfpagemode=FullScreen,
+    }
+
+\title{On-chain KZG Setup Ceremony - Technical Report}
+\author{Valeria Nikolaenko, Sam Ragsdale, Joseph Bonneau\\a16z crypto research}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Notation and setup}
+
+We assume three groups $\mathbb{G}_1, \mathbb{G}_2, \mathbb{G}_T$, each of prime order $p$, with generators $B_1, B_2, B_T$ respectively, addition as a group operation, and a bilinear pairing operation $e: \mathbb{G}_1 \times \mathbb{G}_2 \rightarrow \mathbb{G}_T$. Our goal is to construct a ``powers of $\tau$'' structured reference string (SRS) of the form:
+
+\begin{alignat}{7}
+\pp &=[ &P_1,& \quad &P_2,&  \quad &P_3,&  \quad &\ldots,&  \quad &P_n;&  \quad &P_+]&
+\\
+&=[ &\tau B_1,& &\tau^2 B_1,& &\tau^3 B_1,& &\ldots,& &\tau^n B_1;& & \tau B_2, \tau^2 B_2, \ldots, \tau^k B_2]&\\
+&=( &[\tau]_1,& &[\tau^2]_1,& &[\tau^3]_1,& &\ldots,& &[\tau^n]_1;& & [\tau]_2, [\tau^2]_2, \ldots, [\tau^k]_2)&
+\end{alignat}
+
+It is essential that $\tau$ be kept secret in the final string, $\pp$.
+
+The protocol for constructing $\pp$ will be a sequential multi-party computation between $m$ contributors in $m$ rounds, such that each contributor, $C_j$, contributes only in the $j$\textsuperscript{th} round.
+Each contributor can efficiently prove that their participation was correct. The protocol should be secure as long as any individual contributor used good randomness in their round and was honest, i.e. only used locally generated secrets as intended by the protocol and destroyed them successfully after the protocol's completion.
+In this way it is possible to conduct a permissionless setup in which any contributor is free to contribute, mediated by a smart contract which verifies each participant's contribution.
+
+\subsection{Initialization}
+The initial state (after round 0) consists of the string\footnote{We focus here on the case when the setup contains only one power in $\GG_2$, i.e. when $k = 1$, however it is straightforward to generalize to $k > 1$. It is not strictly necessary to have $k > 1$, but it benefits the efficiency of certain applications, e.g. KZG polynoimal commitments with multi-point evaluation proofs.}:
+
+\begin{alignat}{7}
+\pp &=[ &P_{1, 0},& \quad &P_{2, 0},&  \quad &P_{3, 0},&  \quad &\ldots,&  \quad &P_{n, 0};&  \quad &P_{+, 0}]&
+\\
+&=[ & B_1,& & B_1,& & B_1,& &\ldots,& & B_1;& & B_2]&
+\end{alignat}
+
+%\begin{align}
+%\pp_0 &= [F^0_1,\; F^0_2,\; F^0_3,\; \ldots,\; F^0_n;\; F^0_+]
+%\\
+%&=[B_1,\;  B_1,\; B_1,\; \ldots,\; B_1;\;  B_2] \label{eq:init}
+%\end{align}
+
+That is, $n$ copies of the generator $B_1$ plus $k$ copies of the generator $B_2$.
+This is equivalent to an SRS with $\tau = 1$.
+This is trivially insecure as everybody knows $\tau$, but is trivially easy to check for well-formedness.
+
+\subsection{Update procedure}
+
+At the beginning of round $j$, we assume the current string is of the form:
+
+\begin{alignat}{7}
+\pp &=[ &P_{1, j-1},& \quad &P_{2, j-1},&  \quad &P_{3, j-1},&  \quad &\ldots,&  \quad &P_{n, j-1};&  \quad &P_{+, j-1}]& &
+\\
+&=[ &\tau_{j-1} B_1,& &\tau_{j-1}^2 B_1,& &\tau_{j-1}^3 B_1,& &\ldots,& &\tau_{j-1}^n B_1;& &\tau_{j-1} B_2]& &
+\end{alignat}
+
+%\begin{equation}
+%\pp_{j-1} &=[& F^{j-1}_1&,& F^{j-1}_2&,& F^{j-1}_3&,& \ldots&,& F^{j-1}_n&;& F^{j-1}_+&]&
+%\\
+%&=[& B_1&,&  B_1&,&  B_1&,& \ldots&,& B_1&;&  B_2&]&
+%\pp_{j-1} = [(x_{j-1}) B_1,\; (x_{j-1})^2 B_1,\; (x_{j-1})^3 B_1,\; \ldots,\; (x_{j-1})^n B_1;\;  (x_{j-1}) B_2] \label{eq:round_j_precondition}
+%\end{equation}
+
+The value $\tau_{j-1}$ is of course hidden.
+Contributor $C_j$ chooses a random value $r_j \sample \mathbb{Z}^*_p$ and publishes a new string:
+
+\begin{alignat}{7}
+\pp = &[ P_{1, j},& & P_{2, j},& &  P_{3, j},& &\ldots,& & P_{n, j};& & P_{+, j}]& \\
+= &[ (P_{1, j-1})\cdot {r_j},& \quad &(P_{1, j-1})\cdot {r_j^2},&  \quad &(P_{1, j-1})\cdot {r_j^3},&  \quad &\ldots,&  \quad &(P_{1, j-1})\cdot {r_j^n};&  \quad &(P_{+, j-1})\cdot r_j]&
+\\
+=&[ {r_j \tau_{j-1}} B_1,& &{r_j^2 \tau_{j-1}^2}\cdot B_1,& &{r_j^3 \tau_{j-1}^3} B_1,& &\ldots,& &{r_j^n \tau_{j-1}^n} B_1;& &{r_j \tau_{j-1}} B_2]& \\
+=&[  {\tau_j} B_1,& & {\tau_j^2} B_1,& & {\tau_j^3} B_1,& &\ldots,& & {\tau_j^n} B_1;& & {\tau_j} B_2]&\label{eq:pp}
+\end{alignat}
+
+%\begin{align}
+%\pp_{j} &= [r_j(x_{j-1}) B_1,\; r_j^2(x_{j-1})^2 B_1,\; r_j^3(x_{j-1})^3 B_1,\; \ldots,\; r_j^n(x_{j-1})^n B_1;\;  r_j(x_{j-1}) B_2] %\;\;,\;\; \pi_j \label{eq:round_j_precondition}
+%\\
+%\pp_j &= [(x_j) B_1,\; (x_j)^2 B_1,\; (x_j)^3 B_1,\; \ldots,\; (x_j)^n B_1;\;  (x_j) B_2] \label{eq:pp}
+%\pp_j = [y B_1,\; y^2 B_1,\; y^3 B_1,\; \ldots,\; y^n B_1;\; y B_2],\;\;\; \textsf{proof}= \pi. \label{eq:pp}
+%\end{align}
+
+The new setup has $\tau_j = r_j \cdot \tau_{j-1}$ as its secret. If an attacker knows $\tau_{j-1}$ but not $r_j$, and $r_j$ was chosen uniformly at random from $\mathbb{Z}^*_p$ (meaning in particular that $r_j \neq 0$), then the attacker will have no information about $\tau_j$ (since the operations are done modular a large prime $p$ of roughly 256-bits length).
+In other words, each new honest contributor randomizes the setup completely.
+If at least one of the contributors supplies their update, $r_j$, randomly and properly destroys it (and forgets), then the resulting secret ($\tau_m = r_1\cdot r_2 \cdot \ldots \cdot r_m$) is randomly distributed and unknown to anybody.
+
+\subsection{Update proofs}
+
+Contributor $C_j$ must convince the verifier (the smart contract) that the following three statements are true about its contribution:
+\begin{enumerate}
+    \item \textbf{The prover knows $r_j$}: a proof that the latest contribution to the ceremony builds on the work of the preceding participants. %, such that $y = r \cdot x$ for $x$ being the dlog of the first element in the previous setup $\pp_0$
+    \item \textbf{The new parameters, $\pp_j$, are well-formed}: the contract should verify that $\pp_j$ consists of consecutive powers of some $\tau_j$.
+    \item \textbf{The update is non-degenerative, $r_j \neq 0$}: a defense against attackers trying to erase the setup thus undermining the contributions of previous participants.
+\end{enumerate}
+%the new set, $\pp$, is well formed: i.e. there is a $y$ for which the $\pp$ has the above form, [2] , and [3] $r \neq 0$.
+Only if the verifier (smart contract) is convinced that all of the above is true, it updates the setup $\pp$ with the contribution from $C_j$.\\
+
+We now give the details of how each of these statements is verified on-chain and what proofs (if any) the contributor needs to send to facilitate the verification:
+
+\begin{enumerate}
+    \item \textbf{The prover knows $r_j$}. The contributor computes a zero-knowledge proof $\pi$ demonstrating that it knows $r_j$ s.t. $P_{1, j} = P_{1, j-1}\cdot {r_j}$
+    The could be a simple Fiat-Shamir version of Schnorr's \textSigma{}-protocol, and it works as follows.\\
+    
+    The prover, the contributor $C_j$, samples a random $z \sample \mathbb{Z}^*_p$ and computes
+    \begin{align*}
+    h &= \textsf{HASH}(P_{1, j}\;||\;P_{1, j-1}\;||\; z \cdot P_{1, j-1})\\
+    \pi &= (z \cdot P_{1, j-1},\;\; z + h \cdot r_j)
+    \end{align*}
+    where $\textsf{HASH}$ is a collision-resistant hash function (typically for a 256-bits prime $p$ the hash function needs to output a 512-bits number to argue the uniformity of the distribution of $h$ for zero-knowledge).
+
+    The verifier, the smart contract verifies the proof $\pi = (\pi_1, \pi_2)$ as follows:
+    \begin{equation}
+        P_{1, j-1}^{\pi_2} = P_{1, j}^{\textsf{HASH}(P_{1, j}\;||\;P_{1, j-1}\;||\;\pi_1)}\; \cdot\; \pi_1.\label{eq:proof}
+    \end{equation}
+    
+    \item \textbf{The new parameters, $\pp_j$, are well-formed}. To verify that $\pp_j$ is correctly formed as stated in Eq.~(\ref{eq:pp}), the verifier will sample $n$ random scalars $\rho_0, \rho_1, \ldots, \rho_{n-1} \sample \left(\mathbb{Z}^*_p\right)^n$ and verify that:
+    %assuming the following notation $\pp = [F_1, F_2, \ldots, F_n; F']$, verify that the following holds:
+    \begin{equation}
+        e(\rho \cdot B_1 + \sum_{i=1}^{n-1}(\rho_i \cdot P_{i, j}),\; P_{+, j})\;\; =\;\;
+        e(\rho_0 \cdot P_{1, j} + \sum_{i=1}^{n-1}(\rho_i \cdot P_{i+1, j}),\; B_2)\label{eq::e}
+    \end{equation}
+    For an honest prover this will always hold since:
+    \begin{align*}
+        e\left(\rho_0 \cdot B_1 + \sum_{i=1}^{n-1}\left(\tau_j^i \cdot B_1\right)\cdot {\rho_i},\;\;\;\; \tau_j \cdot B_2\right) =
+%        &e\left(B_1 \cdot \left(\rho_0 + \sum_{i=1}^{n-1}\rho_i \cdot \tau_j^i\right),\;\;\;\;  \tau_j \cdot B_2\right) =\\
+%        &e\left(\rho \cdot B_1g_1^{\rho_0 \tau_j + \sum_{i=1}^{n-1}\rho_i (\tau_j)^{i+1}}, g_2\right) =
+        e\left({\rho_0 \tau_j} B_1 + \sum_{i=1}^{n-1}\left({\tau_j^{i+1}} B_1\right)\cdot {\rho_i},\;\;\;\; B_2\right)
+    \end{align*}
+    \item Finally to verify that $r_j \neq 0$ the verifier simply checks that the first element in the new setup is non-zero:
+    \begin{equation}
+        P_{1, j} \neq 0.
+    \end{equation}
+\end{enumerate}
+
+\textbf{Correctness:} it is easy to see that an honest prover that updated the setup correctly and produced correct proof $\pi$ will convince the verfier about the correctness of its setup.
+
+\textbf{Zero-knowledge:} it is also easy to simulate a satisfying proof with the same distribution for Eq.~(\ref{eq:proof}) without knowing $r_j$ by programming the random oracle (using the random-oracle (RO) assumption) as follows. Choose random $w, h \xleftarrow{\$} \mathbb{Z}^*_p$, and set $\pi_1 = P_{1, j-1}^w / P_{1, j}^h$, $\pi_2 = w$ and program the random oracle: $\textsf{HASH}(P_{1, j}\;||\;P_{1, j-1}\;||\; P_{1, j-1}^w) = h$.
+
+\textbf{Knowledge soundness:} this is a harder part to argue.
+We need to show that for any convincing prover the witness $r_j$ can be extracted.
+
+We first prove that if Eq.~\ref{eq::e} holds for random $\rho$-strings, then the public setup parameters should be of the form $\pp = [P_1, P_2, \ldots, P_n; P_+] = [\tau B_1, \tau^2 B_1, \ldots, \tau^n B_1; \tau B_2]$ for some $\tau$. We first denote by $\tau$ the ``discrete log" of $P_+$ base $B_2$ (i.e, $P_+ = \tau B_2$), and assuming Eq.~\ref{eq::e} holds for n distinct random $\rho$-strings, we get that the following holds of a random matrix $\Gamma$ of size $n \times n$ (here $\Gamma$ is constructed by putting $\rho$-elements row by row into a matrix):
+\[\tau \Gamma \times \begin{bmatrix}
+           B_1 \\
+           P_1 \\
+           P_2 \\
+           \vdots \\
+           P_{n-1}
+         \end{bmatrix} = \Gamma \times\begin{bmatrix}
+           P_1 \\
+           P_2 \\
+           P_3 \\
+           \vdots \\
+           P_n
+         \end{bmatrix}
+\]
+We know that with an overwhelming probability a random matrix is invertible, thus we can multiply both parts by $\Gamma^{-1}$ and get:
+\[\begin{matrix}
+           \tau B_1 = P_1 \\
+           \tau P_1 = P_2 \\
+           \tau P_2 = P_3 \\
+           \vdots \\
+           \tau P_{n-1} = P_n
+         \end{matrix}
+\]
+Which immediately implies that the public parameters are of the form:
+\[\pp = [P_1, P_2, \ldots, P_n; P_+] = \linebreak[0] [\tau B_1, \tau^2 B_2, \ldots, \tau^n B_1; \tau B_2].\]
+
+And finally, we exploit knowledge soundness of the \textSigma{}-protocol of the proof $\pi_j$ to extract the discrete log $r_j = \tau_j/\tau_{j-1}$ of $\tau_j B_1$ to the base $\tau_{j-1} B_1$.
+
+\section{Related Work}
+Ben-Sasson et al.~\cite{ben2015secure} constructed the first protocol to solve the problem of sampling the public parameters for zk-proofs. The protocol requires a pre-commitment phase, and thus relies on the parties to remain available making it challenging to scale this protocol in practice. Bowe et al.~\cite{bowe2018multi} instantiated the protocol with Pinnochio for Zcash Sprout. Abdolmaleki et al.~\cite{abdolmaleki2019uc} proved the UC-security of this protocol for Groth16.
+
+Another family of protocols grows out of the work of Bowe et al.~\cite{bowe2017scalable} who designed a protocol for Groth16, the parties do not have to stay on-line, so the protocol scales well in practice. However it requires a random beacon - an auxiliary process that produces publicly verifiable unpredictable and unbiasable randomness. It has two phases, the first phase is commonly referred as powers-of-tau and is the style of setup described above. And the second phase of the ceremony depends on the SNARK circuit. In the work of Kohlweiss, Maller, Siim, and Volkhov ~\cite{kohlweiss2021snarky} the need of a random beacon in the setup was eliminated.
+
+Vitalik Buterin~\cite{buterintrustedsetup} suggested a simple way to verify the update to the setup that opens the possibility of a gas-efficient on-chain deployment.
+
+\section*{Acknowledgment}\nonumber We would like to thank Dan Boneh for useful feedback at the early stages of this work.
+\bibliography{main}
+\bibliographystyle{alpha}
+\end{document}
