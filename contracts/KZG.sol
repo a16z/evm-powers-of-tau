@@ -24,7 +24,7 @@ contract KZG {
     event CeremonyUpdated(uint submissionCount);
 
     constructor(bytes[] memory _g1s, bytes[] memory _g2s) {
-        require(_g1s.length == 1); // Limitation until V2 with cheaper verification
+        require(_g2s.length == 1); // Limitation until V2 with cheaper verification
 
         numG1 = _g1s.length;
         numG2 = _g2s.length;
