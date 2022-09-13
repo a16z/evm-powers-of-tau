@@ -42,18 +42,25 @@ contract KZG {
             require(_g1s.length == numG1);
             require(_g2s.length == numG2);
 
+            // Randomness for discrete log check
+            uint disLogRandomness = uint(hashRandomness(AltBn128.g1Marshal(prevG1_0), _g1s[0], _pi1)) % Fr;
+
+            // Randomness for pairing check
+            uint pairingRandomness = disLogRandomness;
+
             AltBn128.G1Point[] memory updatedG1s = new AltBn128.G1Point[](_g1s.length);
             for (uint i = 0; i < updatedG1s.length; i++) {
                 updatedG1s[i] = AltBn128.g1Unmarshal(_g1s[i]);
+
+                pairingRandomness = uint(keccak256(abi.encode(pairingRandomness, _g1s[i]))) % Fr;
             }
 
             AltBn128.G2Point memory updatedG2 = AltBn128.g2Unmarshal(_g2s[0]);
             AltBn128.G1Point memory pi1 = AltBn128.g1Unmarshal(_pi1);
 
-            uint detRandomnessFr = uint(hashRandomness(AltBn128.g1Marshal(prevG1_0), _g1s[0], _pi1)) % Fr;
 
-            require(verifyDiscreteLog(prevG1_0, updatedG1s[0], pi1, _pi2, detRandomnessFr));
-            require(verifyPairing(updatedG1s, updatedG2, detRandomnessFr));
+            require(verifyDiscreteLog(prevG1_0, updatedG1s[0], pi1, _pi2, disLogRandomness));
+            require(verifyPairing(updatedG1s, updatedG2, pairingRandomness));
             require(verifyNonZero(updatedG1s[0]));
 
             prevG1_0 = updatedG1s[0];
@@ -85,14 +92,17 @@ contract KZG {
             AltBn128.G1Point memory rhs = AltBn128.scalarMultiply(updatedG1s[0], rho);
 
             for (uint i = 0; i < updatedG1s.length; i++) {
+                AltBn128.G1Point memory currG1 = updatedG1s[i];
+
                 uint prevRho = rho;
                 rho = uint(keccak256(abi.encode(rho)));
+
                 if (i != 0) {
-                    rhs = AltBn128.scalarMultiply(AltBn128.g1Add(rhs, updatedG1s[i]), prevRho);
+                    rhs = AltBn128.scalarMultiply(AltBn128.g1Add(rhs, currG1), prevRho);
                 }
 
                 if (i != updatedG1s.length - 1) {
-                    lhs = AltBn128.scalarMultiply(AltBn128.g1Add(lhs, updatedG1s[i]), rho);
+                    lhs = AltBn128.scalarMultiply(AltBn128.g1Add(lhs, currG1), rho);
                 }
             }
 
