@@ -46,13 +46,11 @@ contract KZG {
             uint disLogRandomness = uint(hashRandomness(AltBn128.g1Marshal(prevG1_0), _g1s[0], _pi1)) % Fr;
 
             // Randomness for pairing check
-            uint pairingRandomness = disLogRandomness;
+            uint pairingRandomness = uint(keccak256(abi.encode(_g1s, _g2s)));
 
             AltBn128.G1Point[] memory updatedG1s = new AltBn128.G1Point[](_g1s.length);
             for (uint i = 0; i < updatedG1s.length; i++) {
                 updatedG1s[i] = AltBn128.g1Unmarshal(_g1s[i]);
-
-                pairingRandomness = uint(keccak256(abi.encode(pairingRandomness, _g1s[i]))) % Fr;
             }
 
             AltBn128.G2Point memory updatedG2 = AltBn128.g2Unmarshal(_g2s[0]);
@@ -86,7 +84,7 @@ contract KZG {
         AltBn128.G1Point[] memory updatedG1s,
         AltBn128.G2Point memory updatedG2,
         uint randomness) public view returns (bool) {
-            uint rho = uint(keccak256(abi.encode(randomness)));
+            uint rho = uint(keccak256(abi.encode(randomness, 0)));
 
             AltBn128.G1Point memory lhs = AltBn128.scalarMultiply(AltBn128.g1(), rho);
             AltBn128.G1Point memory rhs = AltBn128.scalarMultiply(updatedG1s[0], rho);
@@ -95,7 +93,7 @@ contract KZG {
                 AltBn128.G1Point memory currG1 = updatedG1s[i];
 
                 uint prevRho = rho;
-                rho = uint(keccak256(abi.encode(rho)));
+                rho = uint(keccak256(abi.encode(randomness, i+1)));
 
                 if (i != 0) {
                     rhs = AltBn128.scalarMultiply(AltBn128.g1Add(rhs, currG1), prevRho);
