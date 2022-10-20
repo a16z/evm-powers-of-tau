@@ -13,7 +13,7 @@ Cryptographic details can be found in `techreport/main.pdf`.
 - Test: `cargo test`
 
 ## Build notes 
-- Solidity tests require Solc
+- Solidity tests require Solc and Anvil
 - Solc 8.16.0 requires z3 on M1 macs: `brew install z3`
 - Gas usage during tests: `cargo test -- --nocapture`
 

@@ -84,29 +84,21 @@ contract KZG {
         AltBn128.G1Point[] memory updatedG1s,
         AltBn128.G2Point memory updatedG2,
         uint randomness) public view returns (bool) {
-            uint rho = uint(keccak256(abi.encode(randomness, 0)));
+            uint rho = uint(keccak256(abi.encode(randomness, 0))) % Fr;
 
-            AltBn128.G1Point memory lhs = AltBn128.scalarMultiply(AltBn128.g1(), rho);
-            AltBn128.G1Point memory rhs = AltBn128.scalarMultiply(updatedG1s[0], rho);
-
-            for (uint i = 0; i < updatedG1s.length; i++) {
-                AltBn128.G1Point memory currG1 = updatedG1s[i];
-
-                uint prevRho = rho;
-                rho = uint(keccak256(abi.encode(randomness, i+1)));
-
-                if (i != 0) {
-                    rhs = AltBn128.scalarMultiply(AltBn128.g1Add(rhs, currG1), prevRho);
-                }
-
-                if (i != updatedG1s.length - 1) {
-                    lhs = AltBn128.scalarMultiply(AltBn128.g1Add(lhs, currG1), rho);
-                }
+            AltBn128.G1Point memory R = updatedG1s[0];
+            uint rollingRho = 1;
+            for (uint i = 1; i < updatedG1s.length - 1; i++) {
+                rollingRho = mulmod(rollingRho, rho, Fr);
+                R = AltBn128.g1Add(AltBn128.scalarMultiply(updatedG1s[i], rollingRho), R);
             }
+            rollingRho = mulmod(rollingRho, rho, Fr);
 
+            AltBn128.G1Point memory lhsG1 = AltBn128.g1Add(AltBn128.g1(), AltBn128.scalarMultiply(R, rho));
+            AltBn128.G1Point memory rhsG1 = AltBn128.g1Add(R, AltBn128.scalarMultiply(updatedG1s[updatedG1s.length - 1], rollingRho));
             AltBn128.G2Point memory g2GeneratorInv = AltBn128.g2Inv();
 
-            return AltBn128.pairing(lhs, updatedG2, rhs, g2GeneratorInv);
+            return AltBn128.pairing(lhsG1, updatedG2, rhsG1, g2GeneratorInv);
     }
 
     function verifyNonZero(

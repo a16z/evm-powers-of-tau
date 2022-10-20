@@ -99,7 +99,8 @@ async fn launch_integration() -> (
         .expect("Failed to create provider")
         .interval(Duration::from_millis(10u64));
 
-    let client = SignerMiddleware::new(provider, wallet);
+    let anvil_chain_id = provider.get_chainid().await.unwrap();
+    let client = SignerMiddleware::new(provider, wallet.with_chain_id(anvil_chain_id.as_u64()));
     let client = Arc::new(client);
 
     let (init_g1s, init_g2s) = pot_update::init_params(NUM_G1, NUM_G2);
